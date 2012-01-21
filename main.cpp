@@ -19,14 +19,36 @@ int			setup_nocd(PROCESS_INFORMATION *pi, DWORD ImageBase)
 	SIZE_T	written = 0;
 	DWORD	oldprot;
 
+	/* NOP */
 	memset(buf, 0x90, 5);
 	VirtualProtect((LPVOID)(ImageBase + 0x10c2f4), 5, PAGE_EXECUTE_READWRITE, &oldprot);
-	if (!WriteProcessMemory(pi->hProcess, (LPVOID)(ImageBase + 0x10c2f4), buf, 5, &written) && written != 5)
+	if (!WriteProcessMemory(pi->hProcess, (LPVOID)(ImageBase + 0x10c2f4), buf, 5, &written) || written != 5)
 		error("WriteProcessMemory");
+	VirtualProtect((LPVOID)(ImageBase + 0x10c2f4), 5, oldprot, &oldprot);
+
+	/* SETUP JMP */
 	buf[0] = 0xEB;
-	VirtualProtect((LPVOID)(ImageBase + 0xed9df), 5, PAGE_EXECUTE_READWRITE, &oldprot);
-	if (!WriteProcessMemory(pi->hProcess, (LPVOID)(ImageBase + 0xed9df), buf, 1, &written) && written != 1)
+	VirtualProtect((LPVOID)(ImageBase + 0xed9df), 1, PAGE_EXECUTE_READWRITE, &oldprot);
+	if (!WriteProcessMemory(pi->hProcess, (LPVOID)(ImageBase + 0xed9df), buf, 1, &written) || written != 1)
 		error("WriteProcessMemory");
+	VirtualProtect((LPVOID)(ImageBase + 0xed9df), 1, oldprot, &oldprot);
+
+	VirtualProtect((LPVOID)(ImageBase + 0x10bd66), 1, PAGE_EXECUTE_READWRITE, &oldprot);
+	if (!WriteProcessMemory(pi->hProcess, (LPVOID)(ImageBase + 0x10bd66), buf, 1, &written) || written != 1)
+		error("WriteProcessMemory");
+	VirtualProtect((LPVOID)(ImageBase + 0x10bd66), 1, oldprot, &oldprot);
+	
+	/* If RegKey CdDrive is not set */
+	buf[0] = 'D';
+	buf[1] = ':';
+	buf[2] = '0';
+	VirtualProtect((LPVOID)(ImageBase + 0x298838), 1, PAGE_EXECUTE_READWRITE, &oldprot);
+	if (!WriteProcessMemory(pi->hProcess, (LPVOID)(ImageBase + 0x298838), buf, 3, &written) || written != 3)
+		error("WriteProcessMemory");
+	VirtualProtect((LPVOID)(ImageBase + 0x298838), 1, oldprot, &oldprot);
+
+	
+
 	return (0);
 }
 
@@ -52,6 +74,7 @@ int		launch_heroes3(void)
 	if (!ReadProcessMemory(pi.hProcess, (BYTE*)pbi.PebBaseAddress + 8, &ImageBase, 4, &read) && read != 4)
 		error("ReadProcessMemory");
 	setup_nocd(&pi, ImageBase);
+	Sleep(100);
 	ResumeThread(pi.hThread);
 	return (0);
 }
