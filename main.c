@@ -2,15 +2,29 @@
 	it try to add mofication to heroes of
 	might and magic 3 Complete Edition */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <Windows.h>
 #include "common.h"
 
 void	error(char *func_name)
 {
 	printf("[-] %s() failed, LastError = %x\n", func_name, GetLastError());
 	exit(EXIT_FAILURE);
+}
+
+int			change_sleep_to_dig(PROCESS_INFORMATION *pi, DWORD ImageBase)
+{
+	char	buf[] = "\x8B\xCE"				/*	MOV ECX, ESI		*/
+					"\x6A\xFF"				/*	PUSH -1				*/
+					"\x6A\xFF"				/*	PUSH -1				*/
+					"\x6A\xFF"				/*	PUSH -1				*/
+					"\x68\x48\xA0\x40\x00"	/*	PUSH 0x0040A048		*/
+					"\xE9\x64\x51\x00\x00";	/* JMP 0x0040EC90 (Dig) */
+	SIZE_T	written = 0;
+	DWORD	oldprot;
+
+	VirtualProtect((LPVOID)(0x00409B1A), 18, PAGE_EXECUTE_READWRITE, &oldprot);
+	if (!WriteProcessMemory(pi->hProcess, (LPVOID)(0x00409B1A), buf, 18, &written) || written != 18)
+		error("WriteProcessMemory");
+	VirtualProtect((LPVOID)(0x00409B1A), 18, oldprot, &oldprot);
 }
 
 int			setup_nocd(PROCESS_INFORMATION *pi, DWORD ImageBase)
@@ -41,7 +55,7 @@ int			setup_nocd(PROCESS_INFORMATION *pi, DWORD ImageBase)
 	/* If RegKey CdDrive is not set */
 	buf[0] = 'D';
 	buf[1] = ':';
-	buf[2] = '0';
+	buf[2] = 0;
 	VirtualProtect((LPVOID)(ImageBase + 0x298838), 1, PAGE_EXECUTE_READWRITE, &oldprot);
 	if (!WriteProcessMemory(pi->hProcess, (LPVOID)(ImageBase + 0x298838), buf, 3, &written) || written != 3)
 		error("WriteProcessMemory");
@@ -74,7 +88,7 @@ int		launch_heroes3(void)
 	if (!ReadProcessMemory(pi.hProcess, (BYTE*)pbi.PebBaseAddress + 8, &ImageBase, 4, &read) && read != 4)
 		error("ReadProcessMemory");
 	setup_nocd(&pi, ImageBase);
-	Sleep(100);
+	change_sleep_to_dig(&pi, ImageBase);
 	ResumeThread(pi.hThread);
 	return (0);
 }
