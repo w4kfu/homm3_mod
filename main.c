@@ -12,19 +12,30 @@ void	error(char *func_name)
 
 int			change_sleep_to_dig(PROCESS_INFORMATION *pi, DWORD ImageBase)
 {
-	char	buf[] = "\x8B\xCE"				/*	MOV ECX, ESI		*/
-					"\x6A\xFF"				/*	PUSH -1				*/
-					"\x6A\xFF"				/*	PUSH -1				*/
-					"\x6A\xFF"				/*	PUSH -1				*/
-					"\x68\x48\xA0\x40\x00"	/*	PUSH 0x0040A048		*/
-					"\xE9\x64\x51\x00\x00";	/* JMP 0x0040EC90 (Dig) */
+	/* Action for button */
+	char	buf_action[] = "\x8B\xCE"				/*	MOV ECX, ESI			*/
+					"\x6A\xFF"				/*	PUSH -1					*/
+					"\x6A\xFF"				/*	PUSH -1					*/
+					"\x6A\xFF"				/*	PUSH -1					*/
+					"\x68\x48\xA0\x40\x00"	/*	PUSH 0x0040A048			*/
+					"\xE9\x64\x51\x00\x00";	/* JMP 0x0040EC90 (Dig)		*/
+
+	/* Text Show */
+	char	buf_text[] =	"\xA1\x48\x65\x6A\x00"		/* MOV EAX,DWORD PTR DS:[6A5708]	*/
+						"\x87\x05\x08\x57\x6A\x00"	/* XCHG DWORD PTR DS:[6A5708],EAX	*/
+						"\xC3";						/* RET								*/
 	SIZE_T	written = 0;
 	DWORD	oldprot;
+	DWORD	Addr;
 
 	VirtualProtect((LPVOID)(0x00409B1A), 18, PAGE_EXECUTE_READWRITE, &oldprot);
-	if (!WriteProcessMemory(pi->hProcess, (LPVOID)(0x00409B1A), buf, 18, &written) || written != 18)
+	if (!WriteProcessMemory(pi->hProcess, (LPVOID)(0x00409B1A), buf_action, 18, &written) || written != 18)
 		error("WriteProcessMemory");
 	VirtualProtect((LPVOID)(0x00409B1A), 18, oldprot, &oldprot);
+	VirtualProtect((LPVOID)(0x005B9CB4), 12, PAGE_EXECUTE_READWRITE, &oldprot);
+	if (!WriteProcessMemory(pi->hProcess, (LPVOID)(0x005B9CB4), buf_text, 12, &written) || written != 12)
+		error("WriteProcessMemory");
+	VirtualProtect((LPVOID)(0x005B9CB4), 12, oldprot, &oldprot);
 }
 
 int			setup_nocd(PROCESS_INFORMATION *pi, DWORD ImageBase)
