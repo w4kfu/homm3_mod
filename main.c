@@ -13,17 +13,20 @@ void	error(char *func_name)
 int			change_sleep_to_dig(PROCESS_INFORMATION *pi, DWORD ImageBase)
 {
 	/* Action for button */
-	char	buf_action[] = "\x8B\xCE"				/*	MOV ECX, ESI			*/
-					"\x6A\xFF"				/*	PUSH -1					*/
-					"\x6A\xFF"				/*	PUSH -1					*/
-					"\x6A\xFF"				/*	PUSH -1					*/
-					"\x68\x48\xA0\x40\x00"	/*	PUSH 0x0040A048			*/
-					"\xE9\x64\x51\x00\x00";	/* JMP 0x0040EC90 (Dig)		*/
+	char	buf_action[] =	"\x8B\xCE"				/*	MOV ECX, ESI			*/
+							"\x6A\xFF"				/*	PUSH -1					*/
+							"\x6A\xFF"				/*	PUSH -1					*/
+							"\x6A\xFF"				/*	PUSH -1					*/
+							"\x68\x48\xA0\x40\x00"	/*	PUSH 0x0040A048			*/
+							"\xE9\x64\x51\x00\x00";	/* JMP 0x0040EC90 (Dig)		*/
 
 	/* Text Show */
-	char	buf_text[] =	"\xA1\x48\x65\x6A\x00"		/* MOV EAX,DWORD PTR DS:[6A5708]	*/
-						"\x87\x05\x08\x57\x6A\x00"	/* XCHG DWORD PTR DS:[6A5708],EAX	*/
-						"\xC3";						/* RET								*/
+	char	buf_text[] =	"\xA1\x48\x65\x6A\x00"			/*	MOV EAX,DWORD PTR DS:[6A6548]	*/
+							"\x87\x05\x08\x57\x6A\x00"		/*	XCHG DWORD PTR DS:[6A5708],EAX	*/
+							"\xA1\x4C\x65\x6A\x00"			/*	MOV EAX,DWORD PTR DS:[6A654C]	*/
+							"\x87\x05\x0C\x57\x6A\x00"		/*	XCHG DWORD PTR DS:[6A570C],EAX	*/
+							"\xC3";							/*	RET								*/
+	char	buf_jmp[]	=	"\xE9";
 	SIZE_T	written = 0;
 	DWORD	oldprot;
 	DWORD	Addr;
@@ -32,10 +35,20 @@ int			change_sleep_to_dig(PROCESS_INFORMATION *pi, DWORD ImageBase)
 	if (!WriteProcessMemory(pi->hProcess, (LPVOID)(0x00409B1A), buf_action, 18, &written) || written != 18)
 		error("WriteProcessMemory");
 	VirtualProtect((LPVOID)(0x00409B1A), 18, oldprot, &oldprot);
-	VirtualProtect((LPVOID)(0x005B9CB4), 12, PAGE_EXECUTE_READWRITE, &oldprot);
-	if (!WriteProcessMemory(pi->hProcess, (LPVOID)(0x005B9CB4), buf_text, 12, &written) || written != 12)
+
+	Addr = (DWORD)VirtualAllocEx(pi->hProcess, 0, 23, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+	if (!Addr)
+		error("VirtualAllocEx");
+	if (!WriteProcessMemory(pi->hProcess, (LPVOID)Addr, buf_text, 23, &written) || written != 23)
 		error("WriteProcessMemory");
-	VirtualProtect((LPVOID)(0x005B9CB4), 12, oldprot, &oldprot);
+
+	VirtualProtect((LPVOID)(0x005B9CB4), 5, PAGE_EXECUTE_READWRITE, &oldprot);
+	if (!WriteProcessMemory(pi->hProcess, (LPVOID)(0x005B9CB4), buf_jmp, 1, &written) || written != 1)
+		error("WriteProcessMemory");
+	Addr = Addr - 0x005B9CB4 - 5;
+	if (!WriteProcessMemory(pi->hProcess, (LPVOID)(0x005B9CB4 + 1), &Addr, 4, &written) || written != 4)
+		error("WriteProcessMemory");
+	VirtualProtect((LPVOID)(0x005B9CB4), 5, oldprot, &oldprot);
 }
 
 int			setup_nocd(PROCESS_INFORMATION *pi, DWORD ImageBase)
