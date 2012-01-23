@@ -17,15 +17,13 @@ int			change_sleep_button(PROCESS_INFORMATION *pi, DWORD ImageBase)
 	DWORD	Addr_img;
 	char	new_img[0xD02];
 	DWORD	Addr;
-
-	char	buf_jmp[] = "\xE9";
-
+	char	buf_jmp[] =		"\xE9";
 	char	buf_code[] =	"\x60"							//	PUSHAD
 							"\x81\xFB\x50\xF2\x65\x00"      //  CMP EBX,HEROES3.0065F250
 							"\x75\x0D"						//	JNZ SHORT HEROES3.0047C37D
 							"\x90"
 							"\xBE\x42\x42\x42\x42"			//  MOV ESI, XXXX
-							//"\x8B\x7C\x24\x04"				//	MOV EDI,DWORD PTR SS:[ESP+4]
+							// EDI POINTS ACTUALLY TO BUF WHERE FILE IS DECOMPRESSED
 							"\xB9\x02\x0D\x00\x00"			//	MOV ECX, D02
 							"\xF3\xA4"						//	REP MOVS BYTE PTR ES:[EDI],DWORD PTR DS:[ESI]
 							"\x61"							//	POPAD
@@ -36,7 +34,6 @@ int			change_sleep_button(PROCESS_INFORMATION *pi, DWORD ImageBase)
 	char	buf_nop[9];
 
 	memset(buf_nop, 0x90, 9);
-
 	fp = fopen("iam_dig.def", "rb");
 	if (fp == NULL)
 	{
@@ -46,20 +43,21 @@ int			change_sleep_button(PROCESS_INFORMATION *pi, DWORD ImageBase)
 	fread(new_img, 0xD02, 1, fp);
 	fclose(fp);
 	
+	/* NOP function wich redraw sleep/walk button */
 	VirtualProtect((LPVOID)0x00417F2F, 9, PAGE_EXECUTE_READWRITE, &oldprot);
 	if (!WriteProcessMemory(pi->hProcess, (LPVOID)(0x00417F2F), buf_nop, 9, &written) || written != 9)
 		error("WriteProcessMemory");
 	VirtualProtect((LPVOID)(0x00417F2F), 9, oldprot, &oldprot);
 
+	/* Writting new .def file into memory */
 	Addr_img = (DWORD)VirtualAllocEx(pi->hProcess, 0, 0xD02, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 	if (!Addr_img)
 		error("VirtualAllocEx");
 	if (!WriteProcessMemory(pi->hProcess, (LPVOID)Addr_img, new_img, 0xD02, &written) || written != 0xD02)
 		error("WriteProcessMemory");
 
-
+	/* ESI points to new .def file */
 	memcpy(buf_code + 11, &Addr_img, 4);
-
 
 	Addr = (DWORD)VirtualAllocEx(pi->hProcess, 0, 46, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 	if (!Addr)
@@ -70,7 +68,7 @@ int			change_sleep_button(PROCESS_INFORMATION *pi, DWORD ImageBase)
 	/*	004FAC0E  |.  8BE5          MOV ESP,EBP		*/
 	/*	004FAC10  |.  5D            POP EBP			*/
 	/*	004FAC11  |.  C2 0800       RET 8			*/
-
+	/* SETUP HOOK */
 	VirtualProtect((LPVOID)0x004FAC0E, 5, PAGE_EXECUTE_READWRITE, &oldprot);
 	if (!WriteProcessMemory(pi->hProcess, (LPVOID)(0x004FAC0E), buf_jmp, 1, &written) || written != 1)
 		error("WriteProcessMemory");
